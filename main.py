@@ -5,13 +5,13 @@ import telebot
 from flask import Flask
 
 # ========================================================
-# 1. RENDER FREE TIER COMPATIBILITY (FLASK BACKGROUND SERVER)
+# 1. RENDER COMPATIBILITY
 # ========================================================
 app = Flask('')
 
 @app.route('/')
 def home():
-    return "Bot is alive and running 24/7!"
+    return "Bot is alive and running!"
 
 def run_web_server():
     port = int(os.environ.get("PORT", 8080))
@@ -20,7 +20,7 @@ def run_web_server():
 threading.Thread(target=run_web_server, daemon=True).start()
 
 # ========================================================
-# 2. CONFIGURATIONS & INITIALIZATION
+# 2. CONFIGURATIONS
 # ========================================================
 TELEGRAM_TOKEN = "8992190983:AAFiKT5cknT7dKynl8JdWsiPNGIX4ohe70k"
 COPILOT_ENDPOINT = "https://powerplatform.com"
@@ -30,30 +30,41 @@ user_sessions = {}
 
 def start_copilot_conversation():
     try:
-        # Step A: Fetch the Direct Line token from Power Platform
+        # Step A: Get a fresh Direct Line Token
+        print("Attempting to fetch fresh Direct Line Token from Power Platform...")
         response = requests.get(COPILOT_ENDPOINT)
+        if response.status_code != 200:
+            print(f"Failed to fetch token. HTTP Status Code: {response.status_code}. Response: {response.text}")
+            return None
+            
         token_data = response.json()
-        directline_token = token_data["token"]
+        directline_token = token_data.get("token")
         
-        # Step B: FIX - Connect to the actual Direct Line Conversation Endpoint
+        # Step B: Open the container conversation channel
+        print("Opening conversation channel container on Direct Line...")
         conv_response = requests.post(
             "https://directline.botframework.com/v3/directline/conversations",
             headers={"Authorization": f"Bearer {directline_token}"}
         )
+        
+        if conv_response.status_code not in [200, 201]:
+            print(f"Failed to start conversation. HTTP Status: {conv_response.status_code}. Details: {conv_response.text}")
+            return None
+            
         return conv_response.json()
     except Exception as e:
-        print(f"Error starting Copilot conversation: {e}")
+        print(f"Critical exception raised during Copilot init: {e}")
         return None
 
 # ========================================================
-# 3. MESSAGE HANDLERS WITH ROUTING FIXES
+# 3. MESSAGE HANDLING AND SHUTTLE ROUTING
 # ========================================================
 @bot.message_handler(func=lambda message: True)
 def handle_message(message):
     user_id = message.from_user.id
     user_text = message.text
 
-    # Start conversation tracking if it's a new user session
+    # Re-verify or establish a fresh connection session
     if user_id not in user_sessions or not user_sessions[user_id]:
         user_sessions[user_id] = start_copilot_conversation()
 
@@ -62,31 +73,38 @@ def handle_message(message):
         bot.reply_to(message, "Sorry, I am having trouble connecting to the system right now.")
         return
 
-    conv_id = session["conversationId"]
-    token = session["token"]
+    conv_id = session.get("conversationId")
+    token = session.get("token")
 
-    # FIX: Send user text directly to the specific conversation endpoint
-    send_url = f"https://botframework.com{conv_id}/activities"
+    # Destination URL structures
+    activity_url = f"https://directline.botframework.com/v3/directline/conversations/{conv_id}/activities"
+    
+    # Send user data up
     payload = {
         "locale": "en-US",
         "type": "message",
         "from": {"id": str(user_id)},
         "text": user_text
     }
-    requests.post(send_url, json=payload, headers={"Authorization": f"Bearer {token}"})
+    requests.post(activity_url, json=payload, headers={"Authorization": f"Bearer {token}"})
 
-    # FIX: Retrieve response back from the specific conversation activities endpoint
-    get_url = f"https://botframework.com{conv_id}/activities"
-    res = requests.get(get_url, headers={"Authorization": f"Bearer {token}"})
+    # Pull response payload back down
+    res = requests.get(activity_url, headers={"Authorization": f"Bearer {token}"})
     activities = res.json().get("activities", [])
 
-    # Forward the responses back to the user on Telegram
+    # Process and route back to Telegram client screen
+    bot_replied = False
     for activity in activities:
-        # Check that the message is coming from the bot, not echoing the user's own text
         if activity.get("from", {}).get("id") != str(user_id) and "text" in activity:
             bot.send_message(chat_id=message.chat.id, text=activity["text"])
+            bot_replied = True
+            
+    # Reset tracking if session failed mid-way through payload delivery
+    if not bot_replied:
+        user_sessions[user_id] = None
 
 if __name__ == "__main__":
-    print("Web server running. Bot is listening for Telegram events...")
+    print("Application successfully built. Standing by for loops...")
     bot.infinity_polling()
+
 
