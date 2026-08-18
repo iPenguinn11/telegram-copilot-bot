@@ -14,30 +14,30 @@ def home():
     return "Bot is alive and running 24/7!"
 
 def run_web_server():
-    # Render automatically injects the PORT environment variable
     port = int(os.environ.get("PORT", 8080))
     app.run(host='0.0.0.0', port=port)
 
-# Start the web server in a background thread before the blocking bot loop
 threading.Thread(target=run_web_server, daemon=True).start()
 
 # ========================================================
-# 2. YOUR ORIGINAL CONFIGURATIONS & INITIALIZATION
+# 2. CONFIGURATIONS & INITIALIZATION
 # ========================================================
 TELEGRAM_TOKEN = "8992190983:AAFiKT5cknT7dKynl8JdWsiPNGIX4ohe70k"
-COPILOT_ENDPOINT = "https://default3476b776e9904f72b9506248983162.3d.environment.api.powerplatform.com/powervirtualagents/botsbyschema/crba2_golfRulesHumorMaster/directline/token?api-version=2022-03-01-preview"
+COPILOT_ENDPOINT = "https://powerplatform.com"
 
 bot = telebot.TeleBot(TELEGRAM_TOKEN)
 user_sessions = {}
 
 def start_copilot_conversation():
     try:
+        # Step A: Fetch the Direct Line token from Power Platform
         response = requests.get(COPILOT_ENDPOINT)
         token_data = response.json()
         directline_token = token_data["token"]
         
+        # Step B: FIX - Connect to the actual Direct Line Conversation Endpoint
         conv_response = requests.post(
-            "https://botframework.com",
+            "https://directline.botframework.com/v3/directline/conversations",
             headers={"Authorization": f"Bearer {directline_token}"}
         )
         return conv_response.json()
@@ -46,13 +46,14 @@ def start_copilot_conversation():
         return None
 
 # ========================================================
-# 3. YOUR ORIGINAL MESSAGE HANDLERS
+# 3. MESSAGE HANDLERS WITH ROUTING FIXES
 # ========================================================
 @bot.message_handler(func=lambda message: True)
 def handle_message(message):
     user_id = message.from_user.id
     user_text = message.text
 
+    # Start conversation tracking if it's a new user session
     if user_id not in user_sessions or not user_sessions[user_id]:
         user_sessions[user_id] = start_copilot_conversation()
 
@@ -64,8 +65,8 @@ def handle_message(message):
     conv_id = session["conversationId"]
     token = session["token"]
 
-    # Send user text to Copilot Studio
-    send_url = f"https://botframework.com/{conv_id}/activities"
+    # FIX: Send user text directly to the specific conversation endpoint
+    send_url = f"https://botframework.com{conv_id}/activities"
     payload = {
         "locale": "en-US",
         "type": "message",
@@ -74,19 +75,18 @@ def handle_message(message):
     }
     requests.post(send_url, json=payload, headers={"Authorization": f"Bearer {token}"})
 
-    # Get response back from Copilot Studio
-    get_url = f"https://botframework.com/{conv_id}/activities"
+    # FIX: Retrieve response back from the specific conversation activities endpoint
+    get_url = f"https://botframework.com{conv_id}/activities"
     res = requests.get(get_url, headers={"Authorization": f"Bearer {token}"})
     activities = res.json().get("activities", [])
 
-    # Forward the text response back to the user on Telegram
+    # Forward the responses back to the user on Telegram
     for activity in activities:
+        # Check that the message is coming from the bot, not echoing the user's own text
         if activity.get("from", {}).get("id") != str(user_id) and "text" in activity:
             bot.send_message(chat_id=message.chat.id, text=activity["text"])
 
-# ========================================================
-# 4. START INDEFINITE POLLING LOOP
-# ========================================================
 if __name__ == "__main__":
     print("Web server running. Bot is listening for Telegram events...")
     bot.infinity_polling()
+
