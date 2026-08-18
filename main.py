@@ -22,7 +22,7 @@ threading.Thread(target=run_web_server, daemon=True).start()
 # ========================================================
 # 2. CONFIGURATIONS
 # ========================================================
-TELEGRAM_TOKEN = "8992190983:AAFiKT5cknT7dKynl8JdWsiPNGIX4ohe70k"
+TELEGRAM_TOKEN = "8992190983:AAFDBhOrxsmfYMkDI3R5S5v6X3B8F2YF3Us"
 COPILOT_ENDPOINT = "https://powerplatform.com"
 
 bot = telebot.TeleBot(TELEGRAM_TOKEN)
