@@ -23,7 +23,7 @@ threading.Thread(target=run_web_server, daemon=True).start()
 # 2. CONFIGURATIONS
 # ========================================================
 TELEGRAM_TOKEN = "8992190983:AAFDBhOrxsmfYMkDI3R5S5v6X3B8F2YF3Us"
-COPILOT_ENDPOINT = "https://powerplatform.com"
+COPILOT_ENDPOINT = "https://default3476b776e9904f72b9506248983162.3d.environment.api.powerplatform.com/powervirtualagents/botsbyschema/crba2_golfRulesHumorMaster/directline/token?api-version=2022-03-01-preview"
 
 bot = telebot.TeleBot(TELEGRAM_TOKEN)
 user_sessions = {}
