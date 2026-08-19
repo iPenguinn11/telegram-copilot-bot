@@ -106,5 +106,23 @@ def handle_message(message):
 if __name__ == "__main__":
     print("Application successfully built. Standing by for loops...")
     bot.infinity_polling()
+# Store the watermark in your session data
+user_sessions = {
+    "conversationId": conv_id,
+    "token": token,
+    "watermark": None  # Initialize watermark
+}
+
+# When getting activities, include the watermark if it exists
+watermark = session.get("watermark")
+get_url = f"https://directline.botframework.com/v3/directline/conversations/{conv_id}/activities"
+if watermark:
+    get_url += f"?watermark={watermark}"
+
+res = requests.get(get_url, headers={"Authorization": f"Bearer {token}"})
+data = res.json()
+
+# Save the new watermark for the next turn
+user_sessions["watermark"] = data.get("watermark")
 
 
