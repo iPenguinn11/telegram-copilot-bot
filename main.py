@@ -124,5 +124,49 @@ data = res.json()
 
 # Save the new watermark for the next turn
 user_sessions["watermark"] = data.get("watermark")
+@bot.message_handler(func=lambda message: True)
+def handle_message(message):
+    user_id = message.from_user.id
+    user_text = message.text
+
+    # Initialize session if needed
+    if user_id not in user_sessions or not user_sessions:
+        user_sessions = start_copilot_conversation()
+        user_sessions['watermark'] = None # Initialize empty watermark
+
+    session = user_sessions
+    if not session:
+        bot.reply_to(message, "Sorry, I am having trouble connecting.")
+        return
+
+    conv_id = session.get("conversationId")
+    token = session.get("token")
+    watermark = session.get("watermark") # Retrieve our "bookmark"
+
+    # 1. Send your message to Copilot
+    send_url = f"https://directline.botframework.com/v3/directline/conversations/{conv_id}/activities"
+    payload = {"locale": "en-US", "type": "message", "from": {"id": str(user_id)}, "text": user_text}
+    requests.post(send_url, json=payload, headers={"Authorization": f"Bearer {token}"})
+
+    # 2. Get ONLY NEW responses using the watermark
+    get_url = f"https://directline.botframework.com/v3/directline/conversations/{conv_id}/activities"
+    if watermark:
+        get_url += f"?watermark={watermark}" # Tell Microsoft where we left off
+
+    res = requests.get(get_url, headers={"Authorization": f"Bearer {token}"})
+    data = res.json()
+    
+    # 3. Update the watermark for next time
+    new_watermark = data.get("watermark")
+    if new_watermark:
+        user_sessions['watermark'] = new_watermark
+
+    activities = data.get("activities",)
+
+    # 4. Forward only the bot's actual new replies
+    for activity in activities:
+        # Only send if the message is FROM the bot and has text
+        if activity.get("from", {}).get("id") != str(user_id) and "text" in activity:
+            bot.send_message(chat_id=message.chat.id, text=activity["text"])
 
 
