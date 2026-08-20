@@ -148,3 +148,8 @@ def start_bot():
 
 if __name__ == "__main__":
     start_bot()
+if __name__ == "__main__":
+    # Optional: Clear any existing webhook before starting to poll
+    bot.remove_webhook()
+    print("Bot is starting up...")
+    bot.infinity_polling(timeout=10, long_polling_timeout=5)
